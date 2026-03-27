@@ -1,0 +1,12 @@
+dcm_folder = '/gpfs/projects/KimGroup/projects/tps/_sample_plans/eclipse_tps/stereophan_ap_sMLC';
+
+dicomImporter = matRad_DicomImporter(dcm_folder);
+
+dicomImporter = dicomImporter.matRad_scanDicomImportFolder();
+
+dicomImporter.matRad_importDicom();
+
+
+% set
+% show in GUI
+matRadGUI('ct', ct, 'cst', cst, 'pln', pln, 'result', resultGUI); % TPS dose

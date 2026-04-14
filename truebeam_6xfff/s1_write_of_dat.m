@@ -3,15 +3,34 @@
 clear; clc;
 
 outFile = '/gpfs/projects/KimGroup/projects/tps/matRad/photonPencilBeamKernelCalc/truebeam_6xfff/of.dat';
+csvFile = '/gpfs/projects/KimGroup/projects/tps/matRad/my_scripts/TrueBeamGBD/6FFF Beam Data/Open field Output Factors.csv';
 
-% square field sizes from Golden Beam Data [cm]
-field_cm = [3 4 5 7 10 15 20 30 40]';
+% Read square-field output factors from Golden Beam Data CSV.
+% The CSV is a 2D matrix (field Y x field X); square fields are on the diagonal.
+% Header rows: rows 1-6 are metadata; row 7 has X field sizes starting at col 3.
+% Data rows start at row 8; col 1 is empty, col 2 is Y field size, cols 3+ are OF values.
+raw = readcell(csvFile);
 
-% corresponding square-field output factors
-of = [0.896 0.921 0.940 0.970 1.000 1.029 1.049 1.072 1.080]';
+% Extract X field sizes from row 7 (cols 3 onward)
+x_sizes = cell2mat(raw(7, 3:end));  % [3 4 5 7 10 15 20 30 40]
+
+% Extract Y field sizes and OF matrix from data rows (row 8 onward)
+n_rows = size(raw, 1) - 7;
+y_sizes = zeros(n_rows, 1);
+of_matrix = zeros(n_rows, numel(x_sizes));
+for i = 1:n_rows
+    y_sizes(i) = raw{7 + i, 2};
+    of_matrix(i, :) = cell2mat(raw(7 + i, 3:end));
+end
+
+% Extract diagonal (square fields where X == Y)
+[~, ix] = ismember(y_sizes, x_sizes);
+valid = ix > 0;
+field_cm = y_sizes(valid);
+of = of_matrix(sub2ind(size(of_matrix), find(valid), ix(valid)));
 
 % convert to mm
-field_mm = field_cm * 10;
+field_mm = field_cm * 10;  % field_cm extracted from CSV diagonal
 
 data = [field_mm, of];
 

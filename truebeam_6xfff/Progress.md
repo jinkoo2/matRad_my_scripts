@@ -2,8 +2,8 @@
 
 ## Goal
 Build a custom photon machine file (`photons_TrueBeam_6XFFF.mat`) for the matRad
-Pencil-Beam SVD dose engine from measured water-tank data, and validate it
-against those measurements in a simulated water phantom.
+Pencil-Beam SVD dose engine from Varian TrueBeam Golden Beam Data (GBD), and validate
+it against those measurements in simulated water phantoms.
 
 ---
 
@@ -11,27 +11,46 @@ against those measurements in a simulated water phantom.
 
 ---
 
+## Input data
+
+All measured data comes from the **Varian TrueBeam Golden Beam Data** Excel workbook.
+Sheets are extracted to CSV by `TrueBeamGBD/extract_sheets.py` into per-energy folders:
+
+| Folder | Contents |
+|--------|----------|
+| `TrueBeamGBD/6FFF Beam Data/` | Output factors, PDD, profiles at 1.5/5/10/20/30 cm |
+| `TrueBeamGBD/6MV Beam Data/`  | Same structure |
+| `TrueBeamGBD/10FFF Beam Data/` | Same structure |
+| `TrueBeamGBD/15MV Beam Data/`  | Same structure |
+
+Key CSV files used for 6XFFF commissioning:
+
+| File | Used by | Contents |
+|------|---------|----------|
+| `Open field Output Factors.csv` | s1 | Square-field OFs, diagonal extracted |
+| `Open Field Depth Dose.csv` | s2 | PDD for 8 field sizes (3–40 cm), 301 depth points |
+| `Open Field Profiles at 1.5cm.csv` | s3 | 40×40 cm² crossline profile at 1.5 cm depth |
+| `Open Field Profiles at 1.5cm.csv` | s7/s8/s9 | GBD reference profiles for validation |
+| `Open Field Profiles at 5cm.csv`   | s7/s8/s9 | GBD reference profiles for validation |
+| `Open Field Profiles at 10cm.csv`  | s7/s8/s9 | GBD reference profiles for validation |
+| `Open Field Profiles at 20cm.csv`  | s7/s8/s9 | GBD reference profiles for validation |
+| `Open Field Profiles at 30cm.csv`  | s7/s8/s9 | GBD reference profiles for validation |
+
+---
+
 ## Scripts
 
 | Script | Status | Description |
 |--------|--------|-------------|
-| `s1_write_of_dat.m` | Done | Writes `of.dat` — square-field output factors (3–40 cm, 9 points) |
-| `s2_write_tpr_dat.m` | Done | Writes `tpr.dat` — PDD converted to TPR via ISL correction, 8 field sizes (3–40 cm), 301 depth points (0–30 cm) |
-| `s3_write_primflu_dat.m` | Done | Writes `primflu.dat` — radial primary fluence from measured 40×40 cm² profile at 10 cm |
-| `s4_create_params_dat.m` | Done | Creates `params.dat` — machine scalars (SAD, SCD, photon_energy, fwhm_gauss, electron_range_intensity) |
-| `s5_build_machine.m` | Done | Runs `ppbkc_generateBaseData` and saves `photons_TrueBeam_6XFFF.mat` to `userdata/machines/` |
-| `s6_load_machine.m` | Done | Smoke-test: loads the machine via `matRad_loadMachine` and prints `machine.meta` |
-| `s7_validate_water_phantom_0.m` | In progress | Water-phantom validation — see details below |
-| `s8_validate_truebeam_6xfff.m` | Pending | Extended validation (spherical phantom, PhantomBuilder API) |
-
----
-
-## Input data (measured, TrueBeam 6XFFF)
-
-| File | Contents |
-|------|----------|
-| `pdd_pasted_from_excel.txt` | PDD (% depth dose) for 8 square field sizes (3×3 – 40×40 cm²), depths 0–30 cm in 1 mm steps |
-| `profile_10cm_40x40.txt` | Inline crossplane profile at 10 cm depth, 40×40 cm² field, off-axis ±26.9 cm in 1 mm steps |
+| `s1_write_of_dat.m` | Done | Writes `of.dat` — square-field output factors (3–40 cm) from GBD CSV diagonal |
+| `s2_write_tpr_dat.m` | Done | Writes `tpr.dat` — PDD converted to TPR via ISL correction, 8 field sizes, 301 depth points |
+| `s3_write_primflu_dat.m` | Done | Writes `primflu.dat` — radial primary fluence from 40×40 cm² profile at **1.5 cm depth** |
+| `s4_create_params_dat.m` | Done | Writes `params.dat` — machine scalars (SAD=1000, SCD=345, photon_energy=6, fwhm_gauss=6, etc.) |
+| `s5_build_machine.m` | Done | Orchestrates s1–s4, calls `ppbkc_generateBaseData`, saves `photons_TrueBeam_6XFFF.mat` |
+| `s6_load_machine.m` | Done | Smoke-test: loads machine via `matRad_loadMachine`, prints `machine.meta` |
+| `s7_validate_pdd_profiles_20x20.m` | In progress | Water-phantom validation, 20×20 cm², bixelWidth=5 mm |
+| `s8_validate_pdd_profiles_10x10.m` | Done | Water-phantom validation, 10×10 cm², bixelWidth=5 mm |
+| `s9_validate_pdd_profiles_3x3.m`   | Done | Water-phantom validation, 3×3 cm², bixelWidth=2 mm |
 
 ---
 
@@ -50,6 +69,33 @@ against those measurements in a simulated water phantom.
 
 ---
 
+## Validation phantom design (s7/s8/s9)
+
+All three scripts share the same structure:
+- Single AP beam, gantry 0°, SSD = 100 cm (isoCenter at phantom surface, y=0)
+- `useCustomPrimaryPhotonFluence = true` (required for FFF peaked profile)
+- `enableDijSampling = false`
+- `addMargin = false` (prevents auto-dilation of target by bixelWidth)
+- Outputs: PDD vs GBD, crossline profiles at 1.5/5/10/20/30 cm, FWHM summary
+
+| Script | Field size | Phantom x/z | Phantom y | bixelWidth | Voxels |
+|--------|-----------|-------------|-----------|------------|--------|
+| s7 | 20×20 cm² | ±200 mm | 0–318 mm | 5 mm | 6.4 M |
+| s8 | 10×10 cm² | ±130 mm | 0–318 mm | 5 mm | 2.7 M |
+| s9 | 3×3 cm²   | ±80 mm  | 0–318 mm | 2 mm | 1.0 M |
+
+### Coordinate system
+
+```
+source at (0, −SAD, 0) = (0, −1000, 0) mm
+beam travels in +y direction
+isoCenter at (0, 0, 0) = phantom surface → SSD = SAD = 1000 mm
+ct.y starts at 0 (depth 0 = surface = isoCenter)
+cubeDim = [Ny, Nx, Nz]  (rows=y/depth, cols=x/inline, slices=z/crossline)
+```
+
+---
+
 ## Bugs found and fixed
 
 ### Bug 1 — `s2_write_tpr_dat.m`: PDD passed as TPR (critical)
@@ -57,130 +103,71 @@ against those measurements in a simulated water phantom.
 **Root cause:** `ppbkc_generateBaseData` expects TPR (Tissue Phantom Ratio), which
 is free of inverse-square-law (ISL) effects. PDD already contains the ISL fall-off.
 The SVD engine then applies ISL again in `calcSingleBixel` via `(SAD/geoDists)²`,
-causing a double ISL penalty. At 30 cm depth this underestimates dose by ~40%.
+causing a double ISL penalty (~40% underestimate at 30 cm depth).
 
 **Fix:** Added ISL correction in `s2_write_tpr_dat.m`:
 ```
 TPR(d) = PDD(d) × [(SSD + d) / (SSD + d_ref)]²
 ```
 where SSD = 1000 mm and d_ref = depth of dose maximum per field size (~13 mm).
-After the fix, TPR at 30 cm is ~64% higher than the raw PDD at the same depth.
 
-**Downstream:** Requires re-running `s5_build_machine.m` to regenerate the machine file.
-
-### Bug 2 — `s7_validate_water_phantom_0.m`: FFF primary fluence not enabled
+### Bug 2 — FFF primary fluence not enabled
 
 **Root cause:** `useCustomPrimaryPhotonFluence` defaults to `false`, so
 `machine.data.primaryFluence` (the FFF cone shape from `primflu.dat`) is never
-applied. Every bixel is treated as a flat-top uniform aperture, producing a
-flat-topped calculated profile. The measured 6XFFF profile peaks at 100% on-axis
-and drops to ~55% at the ±20 cm geometric field edge.
+applied. Every bixel is treated as flat-top, producing a flat calculated profile
+instead of the characteristic FFF peak.
 
-**Fix:** Added to `s7_validate_water_phantom_0.m` (section 4, plan settings):
+**Fix:** All validation scripts include:
 ```matlab
 pln.propDoseCalc.useCustomPrimaryPhotonFluence = true;
 ```
-With this enabled, the engine evaluates the primary fluence at each ray's global
-off-axis position, correctly scaling outermost bixels to ~55% relative intensity.
 
-**Side effect:** With custom fluence enabled, the kernel FFT convolution runs
-per ray (~6400 FFTs for a 40×40 field at 5 mm bixel spacing) instead of once
-per beam — significantly increasing computation time.
+### Bug 3 — `s5_build_machine.m`: subscript `clear` wiped `scriptDir`
 
-### Bug 3 — `s5_build_machine.m`: missing `addpath` for ppbkc toolbox
+**Root cause:** `run()` shares the caller's workspace. The `clear; clc` at the top
+of each subscript (s1–s4) wiped the `scriptDir` variable before the next subscript ran.
 
-**Fix:** Added `addpath(toolboxRoot)` so `ppbkc_generateBaseData` is found
-without requiring the user to manually set the MATLAB path.
+**Fix:** Use `mfilename('fullpath')` inline in each `run()` call — it is a built-in
+function, not a workspace variable, so it survives `clear`.
 
----
+### Bug 4 — `s8/s9`: auto target margin inflates field size
 
-## s7 — Water Phantom Validation (AP beam, 40×40 cm², SSD=100 cm)
+**Root cause:** `matRad_StfGeneratorBase` has `addMargin=true` by default, which
+expands the target bounding box by one `bixelWidth` before projecting rays. For a
+10×10 field at 5 mm bixelWidth this shifts rays from ±50 mm to ±55 mm (~11×11 field).
 
-### Phantom design
+**Fix:** `pln.propStf.addMargin = false` in all validation scripts.
 
-| Parameter | Value |
-|-----------|-------|
-| Resolution | 2 mm isotropic |
-| Nx (inline) | 300 voxels → x: −300 to +298 mm |
-| Ny (depth) | 160 voxels → y: 0 to 318 mm |
-| Nz (crossline) | 300 voxels → z: −300 to +298 mm |
-| `cubeDim` | `[Ny, Nx, Nz]` = `[160, 300, 300]` |
-| HU | 0 (water) everywhere |
-| `ct.cube{1}` | Pre-set to 1.0 (rED) to avoid STF density-erase crash |
+### Bug 5 — SVD engine crash with odd-multiple bixelWidth (e.g., 2.5 mm)
 
-### Coordinate system (gantry = 0, AP beam)
+**Root cause:** `intConvResolution = 0.5 mm`. The engine uses:
+- `fieldLimit = ceil(bw / (2 * intConvRes))` → kernel grid half-size
+- `Fpre = ones(floor(bw / intConvRes))` → fluence prefilter size
 
-```
-source at (0, −SAD, 0) = (0, −1000, 0) mm
-beam travels in +y direction
-iso at (0, 0, 0) = phantom surface → SSD = SAD = 1000 mm = 100 cm
-```
+These agree only when `bw` is an **even multiple** of 0.5 mm. For `bw = 2.5 mm`
+(odd multiple: 5×0.5), `fieldLimit` gives a 6×6 grid but `Fpre` is 5×5 → size
+mismatch crash at `Fx = F .* Psi`.
 
-- `ct.y` starts at **0** (not centered) so that depth 0 = phantom surface = isocenter.
-- `cubeDim = [Ny, Nx, Nz]` — MATLAB array order: rows=y, cols=x, slices=z.
-- `doseCube(iy, ix, iz)`: depth varies with `iy`, inline with `ix`, crossline with `iz`.
-
-### CST
-
-| Row | Name | Type | Voxels | Purpose |
-|-----|------|------|--------|---------|
-| 1 | Water | OAR | all | Prevents `ignoreOutsideDensities` from zeroing water outside the PTV |
-| 2 | PTV_40x40 | TARGET | x∈[−200,200] mm, z∈[−200,200] mm, all y | Drives STF ray placement for 40×40 cm² field |
-
-### Plan settings
-
-| Parameter | Value |
-|-----------|-------|
-| `gantryAngles` | 0° |
-| `bixelWidth` | 5 mm |
-| `isoCenter` | [0, 0, 0] mm |
-| `geometricLateralCutOff` | 100 mm |
-| `useCustomPrimaryPhotonFluence` | `true` (required for FFF beam) |
-| Dose grid resolution | 2 mm isotropic |
-
-### Dose extraction
-
-```matlab
-% matRad_world2cubeIndex returns [iy, ix, iz]  (row, col, slice)
-isoIdx = matRad_world2cubeIndex([0 0 0], dij.doseGrid);
-
-% PDD along depth (y = rows), AP beam, central axis
-pdd_calc = doseCube(:, ix0, iz0);
-
-% Inline profile at 10 cm depth (y = 100 mm → iy_10cm ≈ 51)
-prof_calc = doseCube(iy_10cm, :, iz0);
-```
-
-### Outputs
-
-- Figure 1: PDD comparison (measured 40×40 vs. calculated), depths 0–310 mm
-- Figure 2: Inline profile at 10 cm comparison, off-axis ±30 cm
-- Console: dmax, PDD at 5/10/15/20 cm, profile at ±5/10/15/18/20 cm
-- `s7_water_phantom_results.mat`
+**Fix:** Use bixelWidths that are even multiples of 0.5 mm (e.g., 2, 4, 5, 10 mm).
+For s9 (3×3 field) use 2 mm; for s7/s8 use 5 mm.
 
 ---
 
 ## Performance notes
 
-- The SVD photon dose calculation uses single-threaded MATLAB `for` loops over
-  rays/bixels. MATLAB's built-in BLAS/FFTW (multi-threaded) is used only for
-  internal matrix and FFT operations.
-- With `useCustomPrimaryPhotonFluence = true`, the kernel FFT convolution runs
-  per ray instead of once per beam. For a 40×40 field at 5 mm bixel spacing
-  (~6400 rays), expect 20–60 min on a single core.
-- MATLAB Parallel Computing Toolbox (`parfor`) would be needed for loop-level
-  parallelization; the current matRad code does not use it.
+- `useCustomPrimaryPhotonFluence = true` forces per-ray kernel FFT convolution
+  instead of once per beam — significantly increases computation time.
+- MATLAB SVD engine is single-threaded; no `parfor` parallelisation.
+- Approximate runtimes (single core): s9 (~5 min), s8 (~15 min), s7 (~60 min).
 
 ---
 
 ## Known limitations / next steps
 
-- The SVD pencil-beam model does not accurately reproduce scatter beyond the
-  `geometricLateralCutOff` range; the calculated profile will drop to near-zero
-  outside ±300 mm even if measured scatter is non-zero there.
-- `fwhm_gauss` and `electron_range_intensity` in `params.dat` are starting
-  estimates; they may need tuning against measured penumbra and surface dose.
-- `s8` uses `matRad_PhantomBuilder` (spherical PTV) and may need updates to
-  the phantom y-axis convention to match SSD=100 cm.
-- Output factor small-field correction is applied internally by `ppbkc_outputFactorCorrection`;
-  check if your OF data extends to fields ≤ 3×3 cm² for IMRT accuracy.
+- `fwhm_gauss` (6 mm) and `electron_range_intensity` (0.001) in `params.dat` are
+  initial estimates; may need tuning against measured penumbra and surface dose.
+- Only square field sizes are commissioned; IMRT MLC shapes are approximated by
+  bixel superposition.
+- s7 (20×20) PDD match needs verification after switching from bixelWidth=10 mm
+  to 5 mm; large bixels underrepresent scatter build-up at depth.

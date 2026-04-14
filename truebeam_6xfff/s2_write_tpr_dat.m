@@ -1,17 +1,26 @@
 clear; clc;
 
 outputFile = '/gpfs/projects/KimGroup/projects/tps/matRad/photonPencilBeamKernelCalc/truebeam_6xfff/tpr.dat';
+csvFile   = '/gpfs/projects/KimGroup/projects/tps/matRad/my_scripts/TrueBeamGBD/6FFF Beam Data/Open Field Depth Dose.csv';
 
-% Field sizes (mm) — match pdd_pasted_from_excel.txt column order
-fieldSizes = [30 40 60 80 100 200 300 400];
+% Read PDD table from Golden Beam Data CSV.
+% Rows 1-5 are metadata; row 6 has column headers; rows 7+ are data.
+raw = readcell(csvFile);
+headerRow = raw(6, :);   % {'Depth [cm]', '3x3cm2', '4x4cm2', ...}
+dataRows  = raw(7:end, :);
 
-% Load PDD table
-data = readtable('pdd_pasted_from_excel.txt');
+% Extract field sizes (mm) from column headers (format: 'NxNcm2')
+nCols = size(headerRow, 2) - 1;
+fieldSizes = zeros(1, nCols);
+for k = 1:nCols
+    parts = strsplit(headerRow{1+k}, 'x');
+    fieldSizes(k) = str2double(parts{1}) * 10;   % cm -> mm
+end
 
-depth_cm = data{:,1};
+depth_cm = cell2mat(dataRows(:, 1));
 depth_mm = depth_cm * 10;
 
-pdd = data{:,2:end} / 100;   % convert % to fraction (0-1); max value = 1 at dmax
+pdd = cell2mat(dataRows(:, 2:end)) / 100;   % convert % to fraction (0-1); max value = 1 at dmax
 
 % -----------------------------------------------------------------------
 % Convert PDD -> TPR using the ISL (inverse-square-law) correction.

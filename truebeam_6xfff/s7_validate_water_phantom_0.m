@@ -98,6 +98,12 @@ pln.propDoseCalc.doseGrid.resolution.z = res;
 % (default 50 mm; 100 mm covers ±300 mm from outermost ray at ±200 mm)
 pln.propDoseCalc.geometricLateralCutOff = 100;  % mm
 
+% Enable FFF primary fluence: applies the cone-shaped off-axis intensity
+% profile stored in machine.data.primaryFluence to each bixel's kernel.
+% Without this, all bixels are treated as flat-topped (flattened beam),
+% producing a flat profile instead of the peaked FFF cone shape.
+pln.propDoseCalc.useCustomPrimaryPhotonFluence = true;
+
 %% 5. Generate STF
 stf = matRad_generateStf(ct, cst, pln);
 fprintf('STF: %d rays, bixelWidth = %.0f mm, isoCenter = [%.0f %.0f %.0f] mm\n', ...

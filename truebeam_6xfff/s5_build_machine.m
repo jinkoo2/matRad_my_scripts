@@ -1,4 +1,5 @@
 toolboxRoot = '/gpfs/projects/KimGroup/projects/tps/matRad/photonPencilBeamKernelCalc';
+addpath(toolboxRoot);
 
 inputDir = fullfile(toolboxRoot,'truebeam_6xfff');
 

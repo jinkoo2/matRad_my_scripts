@@ -2,33 +2,59 @@ clear; clc;
 
 outputFile = '/gpfs/projects/KimGroup/projects/tps/matRad/photonPencilBeamKernelCalc/truebeam_6xfff/tpr.dat';
 
-% Field sizes (mm)
+% Field sizes (mm) — match pdd_pasted_from_excel.txt column order
 fieldSizes = [30 40 60 80 100 200 300 400];
 
-% Load your pasted table
+% Load PDD table
 data = readtable('pdd_pasted_from_excel.txt');
 
 depth_cm = data{:,1};
 depth_mm = depth_cm * 10;
 
-pdd = data{:,2:end} / 100;  % convert percent to fraction
+pdd = data{:,2:end} / 100;   % convert % to fraction (0-1); max value = 1 at dmax
 
-% Assemble matrix
-tpr = [NaN fieldSizes;
-       depth_mm pdd];
+% -----------------------------------------------------------------------
+% Convert PDD -> TPR using the ISL (inverse-square-law) correction.
+%
+% The ppbkc engine stores TPR (Tissue Phantom Ratio), which is the depth-
+% dose measured at a FIXED source-axis distance.  TPR does NOT include the
+% ISL fall-off.  PDD DOES include ISL because as depth increases, the
+% distance from the source also increases.
+%
+% Relationship (SSD = source-to-surface distance):
+%   PDD(d) = TPR(d) * [(SSD + d_ref) / (SSD + d)]^2
+%   => TPR(d) = PDD(d) * [(SSD + d) / (SSD + d_ref)]^2
+%
+% For this machine: SSD = SAD = 1000 mm.
+% d_ref is the depth of dose maximum (dmax) for each field size; find it
+% as the shallowest depth where PDD first reaches its column maximum.
+% -----------------------------------------------------------------------
+SSD_mm = 1000;   % mm
 
-fid = fopen(outputFile,'w');
+tpr = zeros(size(pdd));
+for col = 1 : size(pdd, 2)
+    [~, dmax_idx]  = max(pdd(:, col));
+    d_ref_mm       = depth_mm(dmax_idx);          % dmax for this field size
+    ISL_factor     = ((SSD_mm + depth_mm) ./ (SSD_mm + d_ref_mm)).^2;
+    tpr(:, col)    = pdd(:, col) .* ISL_factor;
+    fprintf('Field %d mm: dmax = %.0f mm, TPR(300mm)/PDD(300mm) = %.3f\n', ...
+        fieldSizes(col), d_ref_mm, tpr(end,col)/pdd(end,col));
+end
 
-fprintf(fid,'0 ');
-fprintf(fid,'%g ',fieldSizes);
-fprintf(fid,'\n');
+% Assemble and write tpr.dat
+fid = fopen(outputFile, 'w');
 
-for i=1:length(depth_mm)
-    fprintf(fid,'%g ',depth_mm(i));
-    fprintf(fid,'%.6f ',pdd(i,:));
-    fprintf(fid,'\n');
+% Header row: "0" placeholder, then field sizes (mm)
+fprintf(fid, '0 ');
+fprintf(fid, '%g ', fieldSizes);
+fprintf(fid, '\n');
+
+% Data rows: depth (mm), then TPR values
+for i = 1 : length(depth_mm)
+    fprintf(fid, '%g ', depth_mm(i));
+    fprintf(fid, '%.6f ', tpr(i, :));
+    fprintf(fid, '\n');
 end
 
 fclose(fid);
-
-fprintf('tpr.dat written to:\n%s\n',outputFile);
+fprintf('\ntpr.dat (PDD->TPR corrected) written to:\n%s\n', outputFile);
